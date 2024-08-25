@@ -1,14 +1,65 @@
 import math
-from flask import Flask, render_template, request, flash
 from random import shuffle
+from flask import Flask, render_template, request, flash, redirect, url_for, session
+import psycopg2
 import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = 'super secret'
 
 
+
+# Konfigurasi koneksi database PostgreSQL
+def get_db_connection():
+    conn = psycopg2.connect(
+        dbname='ardian',
+        user='postgres',
+        password='postgres',
+        host='localhost',
+        port='5432'
+    )
+    return conn
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if user:
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            flash('Login berhasil!', 'info')
+            return redirect(url_for('index'))
+        else:
+            flash('Username atau password salah', 'danger')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    session.pop('username', None)
+    flash('Anda telah logout', 'success')
+    return redirect(url_for('login'))
+
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    if 'user_id' not in session:
+        flash('Anda harus login dulu', 'warning')
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
         lokasi = request.form['lokasi']
         tahun_kendaraan = request.form['tahun_kendaraan']
@@ -84,6 +135,11 @@ def index():
 
 @app.route('/dataset')
 def dataset():
+    if 'user_id' not in session:
+        flash('Anda harus login dulu', 'warning')
+        return redirect(url_for('login'))
+
+
     try:
         # Read the CSV file into a DataFrame
         items = pd.read_csv('dataset.txt')
