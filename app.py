@@ -3,6 +3,8 @@ from random import shuffle
 from flask import Flask, render_template, request, flash, redirect, url_for, session
 import psycopg2
 import pandas as pd
+import json
+
 
 app = Flask(__name__)
 app.secret_key = 'super secret'
@@ -10,15 +12,12 @@ app.secret_key = 'super secret'
 
 
 # Konfigurasi koneksi database PostgreSQL
-def get_db_connection():
-    conn = psycopg2.connect(
-        dbname='ardian',
-        user='postgres',
-        password='postgres',
-        host='localhost',
-        port='5432'
-    )
-    return conn
+def get_users():
+    with open('data/auth.json') as f:
+        return json.load(f)
+    
+print(get_users)
+
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -27,16 +26,12 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        users = get_users()
+        user = next((u for u in users if u['username'] == username and u['password'] == password), None)
 
         if user:
-            session['user_id'] = user[0]
-            session['username'] = user[1]
+            session['user_id'] = user['id']
+            session['username'] = user['username']
             flash('Login berhasil!', 'info')
             return redirect(url_for('index'))
         else:
@@ -45,12 +40,14 @@ def login():
     return render_template('login.html')
 
 
+
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
     session.pop('username', None)
     flash('Anda telah logout', 'success')
     return redirect(url_for('login'))
+
 
 
 
